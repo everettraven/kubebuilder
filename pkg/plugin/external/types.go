@@ -40,14 +40,14 @@ type PluginRequest struct {
 type PluginResponse struct {
 	// APIVersion defines the versioned schema of the PluginResponse that is back sent back to Kubebuilder.
 	// Initially, this will be marked as alpha (v1alpha1)
-	APIVersion string `json:"apiVersion"`
+	APIVersion string `json:"apiVersion,omitempty"`
 
 	// Command holds the command that gets executed by the plugin such as init, create api, etc.
 	Command string `json:"command"`
 
 	// Help contains the plugin specific help text that the plugin returns to Kubebuilder when it receives
 	// `--help` flag from Kubebuilder.
-	Help string `json:"help"`
+	Help string `json:"help,omitempty"`
 
 	// Universe in the PluginResponse represents the updated file contents that was written by the plugin.
 	Universe map[string]string `json:"universe"`

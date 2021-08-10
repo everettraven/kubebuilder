@@ -17,12 +17,23 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	cfgv2 "sigs.k8s.io/kubebuilder/v3/pkg/config/v2"
+	cfgv3 "sigs.k8s.io/kubebuilder/v3/pkg/config/v3"
 
 	"sigs.k8s.io/kubebuilder/v3/pkg/config"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
+	"sigs.k8s.io/kubebuilder/v3/pkg/plugins/external"
 )
 
 // Option is a function used as arguments to New in order to configure the resulting CLI.
@@ -138,4 +149,140 @@ func WithCompletion() Option {
 		c.completionCommand = true
 		return nil
 	}
+}
+
+// parseExternalPluginArgs returns the program arguments.
+func parseExternalPluginArgs() (args []string) {
+	args = make([]string, len(os.Args)-1)
+	copy(args, os.Args[1:])
+
+	return args
+}
+
+// getPluginsRoot detects the host system and gets the plugins root based on the host.
+func getPluginsRoot() (pluginsRoot string, err error) {
+	switch host := runtime.GOOS; host {
+	case "darwin":
+		logrus.Debugf("Detected host is macOS.")
+		pluginsRoot = filepath.Join("Library", "ApplicationSupport", "kubebuilder", "plugins")
+	case "linux":
+		logrus.Debugf("Detected host is Linux.")
+		pluginsRoot = filepath.Join(".config", "kubebuilder", "plugins")
+	default:
+		// freebsd, openbsd, windows...
+		return "", fmt.Errorf("Host not supported: %v", host)
+	}
+	userHomeDir, err := getHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("error retrieving home dir: %v", err)
+	}
+	pluginsRoot = filepath.Join(userHomeDir, pluginsRoot)
+
+	return pluginsRoot, nil
+}
+
+// DiscoverExternalPlugins discovers the external plugins in the plugins root directory and adds them to external.Plugin.
+func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
+	pluginsRoot, err := getPluginsRoot()
+	if err != nil {
+		logrus.Errorf("could not get plugins root: %v", err)
+		return nil, err
+	}
+
+	rootInfo, err := os.Stat(pluginsRoot)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			logrus.Debugf("External plugins dir %q does not exist, skipping external plugin parsing", pluginsRoot)
+			return nil, nil
+		}
+		return nil, err
+	}
+	if !rootInfo.IsDir() {
+		logrus.Debugf("External plugins path %q is not a directory, skipping external plugin parsing", pluginsRoot)
+		return nil, nil
+	}
+
+	pluginInfos, err := ioutil.ReadDir(pluginsRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pluginInfo := range pluginInfos {
+		if !pluginInfo.IsDir() {
+			logrus.Debugf("%q is not a directory so skipping parsing", pluginInfo.Name())
+			continue
+		}
+
+		versions, err := ioutil.ReadDir(filepath.Join(pluginsRoot, pluginInfo.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, version := range versions {
+			if !version.IsDir() {
+				logrus.Debugf("%q is not a directory so skipping parsing", version.Name())
+				continue
+			}
+
+			pluginFiles, err := ioutil.ReadDir(filepath.Join(pluginsRoot, pluginInfo.Name(), version.Name()))
+			if err != nil {
+				return nil, err
+			}
+
+			for _, pluginFile := range pluginFiles {
+				// find the executable that matches the same name as info.Name().
+				// if no match is found, compare the external plugin string name before dot and match it with info.Name() which is the external plugin root dir.
+				// for example: sample.sh --> sample, externalplugin.py --> externalplugin
+				trimmedPluginName := strings.Split(pluginFile.Name(), ".")
+				if len(trimmedPluginName) == 0 {
+					return nil, fmt.Errorf("Invalid plugin name found %q", pluginFile.Name())
+				}
+
+				if pluginFile.Name() == pluginInfo.Name() || trimmedPluginName[0] == pluginInfo.Name() {
+					// check whether the external plugin is an executable.
+					if !isPluginExectuable(pluginFile.Mode()) {
+						return nil, fmt.Errorf("External plugin %q found in path is not an executable", pluginFile.Name())
+					}
+
+					ep := external.Plugin{
+						PName: pluginInfo.Name(),
+						Path:  filepath.Join(pluginsRoot, pluginInfo.Name(), version.Name(), pluginFile.Name()),
+						// todo(rashmigottipati): external.Plugin must satisfy the Plugin interface,
+						// so adding the supported project version as a placeholder value for now.
+						PSupportedProjectVersions: []config.Version{cfgv2.Version, cfgv3.Version},
+						Args:                      parseExternalPluginArgs(),
+					}
+
+					if err := ep.PVersion.Parse(version.Name()); err != nil {
+						return nil, err
+					}
+
+					logrus.Printf("Adding external plugin: %s", ep.Name())
+
+					ps = append(ps, ep)
+
+				}
+			}
+		}
+
+	}
+	return ps, nil
+}
+
+// isPluginExectuable checks if a plugin is an executable based on the bitmask and returns true or false.
+func isPluginExectuable(mode os.FileMode) bool {
+	return mode&0111 != 0
+}
+
+// getHomeDir returns $XDG_CONFIG_HOME if set, otherwise $HOME.
+func getHomeDir() (string, error) {
+	var err error
+	xdgHome := os.Getenv("XDG_CONFIG_HOME")
+	if xdgHome == "" {
+		xdgHome, err = os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	return xdgHome, nil
 }

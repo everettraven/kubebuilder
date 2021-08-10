@@ -38,6 +38,11 @@ func main() {
 		golangv3.Plugin{},
 	)
 
+	externalPlugins, err := cli.DiscoverExternalPlugins()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	c, err := cli.New(
 		cli.WithCommandName("kubebuilder"),
 		cli.WithVersion(versionString()),
@@ -48,6 +53,7 @@ func main() {
 			&kustomizecommonv1.Plugin{},
 			&declarativev1.Plugin{},
 		),
+		cli.WithPlugins(externalPlugins...),
 		cli.WithDefaultPlugins(cfgv2.Version, golangv2.Plugin{}),
 		cli.WithDefaultPlugins(cfgv3.Version, gov3Bundle),
 		cli.WithDefaultProjectVersion(cfgv3.Version),
