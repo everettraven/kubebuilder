@@ -19,19 +19,20 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
+	"sigs.k8s.io/kubebuilder/v3/pkg/config"
 	cfgv2 "sigs.k8s.io/kubebuilder/v3/pkg/config/v2"
 	cfgv3 "sigs.k8s.io/kubebuilder/v3/pkg/config/v3"
-
-	"sigs.k8s.io/kubebuilder/v3/pkg/config"
+	"sigs.k8s.io/kubebuilder/v3/pkg/machinery"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugins/external"
 )
@@ -181,17 +182,16 @@ func getPluginsRoot() (pluginsRoot string, err error) {
 	return pluginsRoot, nil
 }
 
-// DiscoverExternalPlugins discovers the external plugins in the plugins root directory and adds them to external.Plugin.
-func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
+func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
 	pluginsRoot, err := getPluginsRoot()
 	if err != nil {
 		logrus.Errorf("could not get plugins root: %v", err)
 		return nil, err
 	}
 
-	rootInfo, err := os.Stat(pluginsRoot)
+	rootInfo, err := fs.Stat(pluginsRoot)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, afero.ErrFileNotFound) {
 			logrus.Debugf("External plugins dir %q does not exist, skipping external plugin parsing", pluginsRoot)
 			return nil, nil
 		}
@@ -202,7 +202,7 @@ func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 		return nil, nil
 	}
 
-	pluginInfos, err := ioutil.ReadDir(pluginsRoot)
+	pluginInfos, err := afero.ReadDir(fs, pluginsRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 			continue
 		}
 
-		versions, err := ioutil.ReadDir(filepath.Join(pluginsRoot, pluginInfo.Name()))
+		versions, err := afero.ReadDir(fs, filepath.Join(pluginsRoot, pluginInfo.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -224,7 +224,7 @@ func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 				continue
 			}
 
-			pluginFiles, err := ioutil.ReadDir(filepath.Join(pluginsRoot, pluginInfo.Name(), version.Name()))
+			pluginFiles, err := afero.ReadDir(fs, filepath.Join(pluginsRoot, pluginInfo.Name(), version.Name()))
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +234,7 @@ func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 				// if no match is found, compare the external plugin string name before dot and match it with info.Name() which is the external plugin root dir.
 				// for example: sample.sh --> sample, externalplugin.py --> externalplugin
 				trimmedPluginName := strings.Split(pluginFile.Name(), ".")
-				if len(trimmedPluginName) == 0 {
+				if trimmedPluginName[0] == "" {
 					return nil, fmt.Errorf("Invalid plugin name found %q", pluginFile.Name())
 				}
 
@@ -266,11 +266,25 @@ func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 		}
 
 	}
+
 	return ps, nil
 }
 
+// DiscoverExternalPlugins discovers the external plugins in the plugins root directory and adds them to external.Plugin.
+func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
+	fs := machinery.Filesystem{
+		FS: afero.NewOsFs(),
+	}
+
+	plugins, err := discoverExternalPlugins(fs.FS)
+	if err != nil {
+		return nil, err
+	}
+	return plugins, nil
+}
+
 // isPluginExectuable checks if a plugin is an executable based on the bitmask and returns true or false.
-func isPluginExectuable(mode os.FileMode) bool {
+func isPluginExectuable(mode fs.FileMode) bool {
 	return mode&0111 != 0
 }
 

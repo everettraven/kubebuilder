@@ -19,6 +19,7 @@ package main
 import (
 	"log"
 
+	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/kubebuilder/v3/pkg/cli"
 	cfgv2 "sigs.k8s.io/kubebuilder/v3/pkg/config/v2"
 	cfgv3 "sigs.k8s.io/kubebuilder/v3/pkg/config/v3"
@@ -40,7 +41,7 @@ func main() {
 
 	externalPlugins, err := cli.DiscoverExternalPlugins()
 	if err != nil {
-		log.Fatal(err)
+		logrus.Error(err)
 	}
 
 	c, err := cli.New(

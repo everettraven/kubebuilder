@@ -17,11 +17,8 @@ limitations under the License.
 package external
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -51,10 +48,7 @@ func (p *editSubcommand) Scaffold(fs machinery.Filesystem) error {
 		return err
 	}
 
-	cmd := exec.Command(p.Path)
-	cmd.Stdin = bytes.NewBuffer(reqBytes)
-	cmd.Stderr = os.Stderr
-	out, err := cmd.Output()
+	out, err := outputGetter.GetExecOutput(reqBytes, p.Path)
 	if err != nil {
 		return err
 	}
@@ -69,10 +63,11 @@ func (p *editSubcommand) Scaffold(fs machinery.Filesystem) error {
 		return fmt.Errorf(strings.Join(res.ErrorMsgs, "\n"))
 	}
 
-	currentDir, err := os.Getwd()
+	currentDir, err := currentDirGetter.GetCurrentDir()
 	if err != nil {
 		return fmt.Errorf("error getting current directory: %v", err)
 	}
+
 	for filename, data := range res.Universe {
 		f, err := fs.FS.Create(filepath.Join(currentDir, filename))
 		if err != nil {

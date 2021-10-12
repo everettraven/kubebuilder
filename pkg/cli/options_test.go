@@ -17,15 +17,212 @@ limitations under the License.
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"sigs.k8s.io/kubebuilder/v3/pkg/config"
+	"sigs.k8s.io/kubebuilder/v3/pkg/machinery"
 	"sigs.k8s.io/kubebuilder/v3/pkg/model/stage"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
 )
+
+func TestExternalPluginsDiscovery(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Test External Plugins Suite")
+}
+
+var _ = Describe("discovering external plugins", func() {
+	Context("when plugin executables exist in the expected plugin directories", func() {
+
+		const (
+			filePermissions  os.FileMode = 755
+			testPluginScript             = `#!/bin/bash
+			echo "This is an external plugin"
+			`
+		)
+
+		var (
+			pluginFilePath string
+			pluginFileName string
+			pluginPath     string
+			f              afero.File
+			fs             machinery.Filesystem
+			err            error
+		)
+
+		BeforeEach(func() {
+			fs = machinery.Filesystem{
+				FS: afero.NewMemMapFs(),
+			}
+
+			pluginPath, err = getPluginsRoot()
+			Expect(err).To(BeNil())
+
+			pluginFileName = "externalPlugin.sh"
+			pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
+
+			err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
+			Expect(err).To(BeNil())
+
+			f, err = fs.FS.Create(pluginFilePath)
+			Expect(err).To(BeNil())
+			Expect(f).ToNot(BeNil())
+
+			_, err = fs.FS.Stat(pluginFilePath)
+			Expect(err).To(BeNil())
+		})
+
+		It("should discover the external plugin executable without any errors", func() {
+			// test that DiscoverExternalPlugins works if the plugin file is an executable and
+			// is found in the expected path
+			_, err = f.WriteString(testPluginScript)
+			Expect(err).To(Not(HaveOccurred()))
+
+			err = fs.FS.Chmod(pluginFilePath, filePermissions)
+			Expect(err).To(Not(HaveOccurred()))
+
+			fileInfo, err := fs.FS.Stat(pluginFilePath)
+			Expect(err).To(BeNil())
+			Expect(fileInfo.Mode()).To(Equal(filePermissions))
+
+			ps, err := discoverExternalPlugins(fs.FS)
+			Expect(err).To(BeNil())
+			Expect(ps).NotTo(BeNil())
+			Expect(len(ps)).To(Equal(1))
+			Expect(ps[0].Name()).To(Equal("externalPlugin"))
+			Expect(ps[0].Version().Number).To(Equal(1))
+		})
+
+		It("should discover multiple external plugins and return the plugins without any errors", func() {
+			// set the execute permissions on the first plugin executable
+			err = fs.FS.Chmod(pluginFilePath, filePermissions)
+
+			pluginFileName = "myotherexternalPlugin.sh"
+			pluginFilePath = filepath.Join(pluginPath, "myotherexternalPlugin", "v1", pluginFileName)
+
+			f, err = fs.FS.Create(pluginFilePath)
+			Expect(err).To(BeNil())
+			Expect(f).ToNot(BeNil())
+
+			_, err = fs.FS.Stat(pluginFilePath)
+			Expect(err).To(BeNil())
+
+			_, err = f.WriteString(testPluginScript)
+			Expect(err).To(Not(HaveOccurred()))
+
+			// set the execute permissions on the second plugin executable
+			err = fs.FS.Chmod(pluginFilePath, filePermissions)
+			Expect(err).To(Not(HaveOccurred()))
+
+			fileInfo, err := fs.FS.Stat(pluginFilePath)
+			Expect(err).To(BeNil())
+			Expect(fileInfo.Mode()).To(Equal(filePermissions))
+
+			ps, err := discoverExternalPlugins(fs.FS)
+			Expect(err).To(BeNil())
+			Expect(ps).NotTo(BeNil())
+			Expect(len(ps)).To(Equal(2))
+
+			Expect(ps[0].Name()).To(Equal("externalPlugin"))
+			Expect(ps[1].Name()).To(Equal("myotherexternalPlugin"))
+
+		})
+
+		Context("that are invalid", func() {
+			BeforeEach(func() {
+				fs = machinery.Filesystem{
+					FS: afero.NewMemMapFs(),
+				}
+
+				pluginPath, err = getPluginsRoot()
+				Expect(err).To(BeNil())
+
+			})
+
+			It("should error if the plugin found is not an executable", func() {
+				pluginFileName = "externalPlugin.sh"
+				pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
+
+				err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
+				Expect(err).To(BeNil())
+
+				f, err := fs.FS.Create(pluginFilePath)
+				Expect(err).To(BeNil())
+				Expect(f).ToNot(BeNil())
+
+				_, err = fs.FS.Stat(pluginFilePath)
+				Expect(err).To(BeNil())
+
+				// set the plugin file permissions to read-only
+				err = fs.FS.Chmod(pluginFilePath, 0444)
+				Expect(err).To(Not(HaveOccurred()))
+
+				ps, err := discoverExternalPlugins(fs.FS)
+				Expect(err).NotTo(BeNil())
+				Expect(err.Error()).To(ContainSubstring("not an executable"))
+				Expect(len(ps)).To(Equal(0))
+
+			})
+		})
+
+		It("should error if the plugin found has an invalid plugin name", func() {
+			pluginFileName = ".sh"
+			pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
+
+			err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
+			Expect(err).To(BeNil())
+
+			f, err = fs.FS.Create(pluginFilePath)
+			Expect(err).To(BeNil())
+			Expect(f).ToNot(BeNil())
+
+			ps, err := discoverExternalPlugins(fs.FS)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("Invalid plugin name found"))
+			Expect(len(ps)).To(Equal(0))
+
+		})
+
+		Context("that does not match the plugin root directory name", func() {
+			BeforeEach(func() {
+				fs = machinery.Filesystem{
+					FS: afero.NewMemMapFs(),
+				}
+
+				pluginPath, err = getPluginsRoot()
+				Expect(err).To(BeNil())
+
+			})
+
+			It("should skip adding the external plugin and not return any errors", func() {
+				pluginFileName = "random.sh"
+				pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
+
+				err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
+				Expect(err).To(BeNil())
+
+				f, err = fs.FS.Create(pluginFilePath)
+				Expect(err).To(BeNil())
+				Expect(f).ToNot(BeNil())
+
+				err = fs.FS.Chmod(pluginFilePath, 755)
+				Expect(err).To(BeNil())
+
+				ps, err := discoverExternalPlugins(fs.FS)
+				Expect(err).To(BeNil())
+				Expect(len(ps)).To(Equal(0))
+
+			})
+		})
+	})
+})
 
 var _ = Describe("CLI options", func() {
 
