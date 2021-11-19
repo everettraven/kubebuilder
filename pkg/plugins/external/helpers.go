@@ -18,9 +18,15 @@ package external
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"sigs.k8s.io/kubebuilder/v3/pkg/machinery"
+	"sigs.k8s.io/kubebuilder/v3/pkg/plugin/external"
 )
 
 var outputGetter ExecOutputGetter = &execOutputGetter{}
@@ -33,7 +39,7 @@ type ExecOutputGetter interface {
 type execOutputGetter struct{}
 
 func (e *execOutputGetter) GetExecOutput(request []byte, path string) ([]byte, error) {
-	cmd := exec.Command(path)
+	cmd := exec.Command(path) //nolint:gosec
 	cmd.Stdin = bytes.NewBuffer(request)
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
@@ -60,4 +66,53 @@ func (o *osWdGetter) GetCurrentDir() (string, error) {
 	}
 
 	return currentDir, nil
+}
+
+func getPluginResponse(fs machinery.Filesystem, req external.PluginRequest, path string) error {
+	req.Universe = map[string]string{}
+
+	reqBytes, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	out, err := outputGetter.GetExecOutput(reqBytes, path)
+	if err != nil {
+		return err
+	}
+
+	res := external.PluginResponse{}
+	if err := json.Unmarshal(out, &res); err != nil {
+		return err
+	}
+
+	// Error if the plugin failed.
+	if res.Error {
+		return fmt.Errorf(strings.Join(res.ErrorMsgs, "\n"))
+	}
+
+	currentDir, err := currentDirGetter.GetCurrentDir()
+	if err != nil {
+		return fmt.Errorf("error getting current directory: %v", err)
+	}
+
+	for filename, data := range res.Universe {
+		f, err := fs.FS.Create(filepath.Join(currentDir, filename))
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			if err := f.Close(); err != nil {
+				return
+			}
+		}()
+
+		if _, err := f.Write([]byte(data)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 }

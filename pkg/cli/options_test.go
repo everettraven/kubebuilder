@@ -17,9 +17,9 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
-	"testing"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -33,14 +33,13 @@ import (
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
 )
 
-func TestExternalPluginsDiscovery(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Test External Plugins Suite")
-}
+// func TestExternalPluginsDiscovery(t *testing.T) {
+// 	RegisterFailHandler(Fail)
+// 	RunSpecs(t, "TestExternalPluginsDiscovery")
+// }
 
-var _ = Describe("discovering external plugins", func() {
+var _ = Describe("Discover external plugins", func() {
 	Context("when plugin executables exist in the expected plugin directories", func() {
-
 		const (
 			filePermissions  os.FileMode = 755
 			testPluginScript             = `#!/bin/bash
@@ -88,9 +87,8 @@ var _ = Describe("discovering external plugins", func() {
 			err = fs.FS.Chmod(pluginFilePath, filePermissions)
 			Expect(err).To(Not(HaveOccurred()))
 
-			fileInfo, err := fs.FS.Stat(pluginFilePath)
+			_, err = fs.FS.Stat(pluginFilePath)
 			Expect(err).To(BeNil())
-			Expect(fileInfo.Mode()).To(Equal(filePermissions))
 
 			ps, err := discoverExternalPlugins(fs.FS)
 			Expect(err).To(BeNil())
@@ -121,9 +119,8 @@ var _ = Describe("discovering external plugins", func() {
 			err = fs.FS.Chmod(pluginFilePath, filePermissions)
 			Expect(err).To(Not(HaveOccurred()))
 
-			fileInfo, err := fs.FS.Stat(pluginFilePath)
+			_, err = fs.FS.Stat(pluginFilePath)
 			Expect(err).To(BeNil())
-			Expect(fileInfo.Mode()).To(Equal(filePermissions))
 
 			ps, err := discoverExternalPlugins(fs.FS)
 			Expect(err).To(BeNil())
@@ -170,24 +167,24 @@ var _ = Describe("discovering external plugins", func() {
 				Expect(len(ps)).To(Equal(0))
 
 			})
-		})
 
-		It("should error if the plugin found has an invalid plugin name", func() {
-			pluginFileName = ".sh"
-			pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
+			It("should error if the plugin found has an invalid plugin name", func() {
+				pluginFileName = ".sh"
+				pluginFilePath = filepath.Join(pluginPath, "externalPlugin", "v1", pluginFileName)
 
-			err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
-			Expect(err).To(BeNil())
+				err = fs.FS.MkdirAll(filepath.Dir(pluginFilePath), 0700)
+				Expect(err).To(BeNil())
 
-			f, err = fs.FS.Create(pluginFilePath)
-			Expect(err).To(BeNil())
-			Expect(f).ToNot(BeNil())
+				f, err = fs.FS.Create(pluginFilePath)
+				Expect(err).To(BeNil())
+				Expect(f).ToNot(BeNil())
 
-			ps, err := discoverExternalPlugins(fs.FS)
-			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(ContainSubstring("Invalid plugin name found"))
-			Expect(len(ps)).To(Equal(0))
+				ps, err := discoverExternalPlugins(fs.FS)
+				Expect(err).NotTo(BeNil())
+				Expect(err.Error()).To(ContainSubstring("Invalid plugin name found"))
+				Expect(len(ps)).To(Equal(0))
 
+			})
 		})
 
 		Context("that does not match the plugin root directory name", func() {
@@ -212,7 +209,7 @@ var _ = Describe("discovering external plugins", func() {
 				Expect(err).To(BeNil())
 				Expect(f).ToNot(BeNil())
 
-				err = fs.FS.Chmod(pluginFilePath, 755)
+				err = fs.FS.Chmod(pluginFilePath, filePermissions)
 				Expect(err).To(BeNil())
 
 				ps, err := discoverExternalPlugins(fs.FS)
@@ -220,6 +217,29 @@ var _ = Describe("discovering external plugins", func() {
 				Expect(len(ps)).To(Equal(0))
 
 			})
+
+			It("should return error if pluginsroot returns an error", func() {
+				var errPluginsRoot = errors.New("could not retrieve plugins root")
+				retrievePluginsRoot = func() (string, error) {
+					return "", errPluginsRoot
+				}
+
+				_, err := discoverExternalPlugins(fs.FS)
+				Expect(err).NotTo(BeNil())
+
+				Expect(err).To(Equal(errPluginsRoot))
+
+			})
+
+			It("should skip parsing of directories if plugins root is not a directory", func() {
+				retrievePluginsRoot = func() (string, error) {
+					return "externalplugin.sh", nil
+				}
+
+				_, err := discoverExternalPlugins(fs.FS)
+				Expect(err).To(BeNil())
+			})
+
 		})
 	})
 })

@@ -139,7 +139,7 @@ var _ = Describe("Run external plugin using Scaffold", func() {
 
 	})
 
-	Context("with invalid mock values of GetExecOutput()", func() {
+	Context("with invalid mock values of GetExecOutput() and GetCurrentDir()", func() {
 		var (
 			pluginFileName string
 			args           []string
@@ -168,73 +168,12 @@ var _ = Describe("Run external plugin using Scaffold", func() {
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
 
-		})
-
-		It("should return error upon running edit subcommand on the external plugin", func() {
-			e := editSubcommand{
-				Path: pluginFileName,
-				Args: args,
-			}
-
-			err = e.Scaffold(fs)
-			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
-
-		})
-
-		It("should return error upon running create api subcommand on the external plugin", func() {
-			c := createAPISubcommand{
-				Path: pluginFileName,
-				Args: args,
-			}
-
-			err = c.Scaffold(fs)
-			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
-		})
-
-		It("should return error upon running create webhook subcommand on the external plugin", func() {
-			c := createWebhookSubcommand{
-				Path: pluginFileName,
-				Args: args,
-			}
-
-			err = c.Scaffold(fs)
-			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
-
-		})
-	})
-
-	Context("with invalid mock values of GetCurrentDir()", func() {
-		var (
-			pluginFileName string
-			args           []string
-			fs             machinery.Filesystem
-			err            error
-		)
-		BeforeEach(func() {
 			outputGetter = &mockValidOutputGetter{}
 			currentDirGetter = &mockInValidOsWdGetter{}
-			fs = machinery.Filesystem{
-				FS: afero.NewMemMapFs(),
-			}
-
-			pluginFileName = "myexternalplugin.sh"
-			args = []string{"--domain", "example.com"}
-
-		})
-
-		It("should return error upon running init subcommand on the external plugin", func() {
-			i := initSubcommand{
-				Path: pluginFileName,
-				Args: args,
-			}
 
 			err = i.Scaffold(fs)
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("error getting current directory"))
-
 		})
 
 		It("should return error upon running edit subcommand on the external plugin", func() {
@@ -242,6 +181,13 @@ var _ = Describe("Run external plugin using Scaffold", func() {
 				Path: pluginFileName,
 				Args: args,
 			}
+
+			err = e.Scaffold(fs)
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
+
+			outputGetter = &mockValidOutputGetter{}
+			currentDirGetter = &mockInValidOsWdGetter{}
 
 			err = e.Scaffold(fs)
 			Expect(err).NotTo(BeNil())
@@ -257,6 +203,13 @@ var _ = Describe("Run external plugin using Scaffold", func() {
 
 			err = c.Scaffold(fs)
 			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
+
+			outputGetter = &mockValidOutputGetter{}
+			currentDirGetter = &mockInValidOsWdGetter{}
+
+			err = c.Scaffold(fs)
+			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("error getting current directory"))
 		})
 
@@ -268,9 +221,15 @@ var _ = Describe("Run external plugin using Scaffold", func() {
 
 			err = c.Scaffold(fs)
 			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("error getting exec command output"))
+
+			outputGetter = &mockValidOutputGetter{}
+			currentDirGetter = &mockInValidOsWdGetter{}
+
+			err = c.Scaffold(fs)
+			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("error getting current directory"))
 
 		})
 	})
-
 })

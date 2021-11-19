@@ -37,6 +37,8 @@ import (
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugins/external"
 )
 
+var retrievePluginsRoot = getPluginsRoot
+
 // Option is a function used as arguments to New in order to configure the resulting CLI.
 type Option func(*CLI) error
 
@@ -183,7 +185,8 @@ func getPluginsRoot() (pluginsRoot string, err error) {
 }
 
 func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
-	pluginsRoot, err := getPluginsRoot()
+	// pluginsRoot, err := getPluginsRoot()
+	pluginsRoot, err := retrievePluginsRoot()
 	if err != nil {
 		logrus.Errorf("could not get plugins root: %v", err)
 		return nil, err
@@ -231,7 +234,8 @@ func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
 
 			for _, pluginFile := range pluginFiles {
 				// find the executable that matches the same name as info.Name().
-				// if no match is found, compare the external plugin string name before dot and match it with info.Name() which is the external plugin root dir.
+				// if no match is found, compare the external plugin string name before dot
+				// and match it with info.Name() which is the external plugin root dir.
 				// for example: sample.sh --> sample, externalplugin.py --> externalplugin
 				trimmedPluginName := strings.Split(pluginFile.Name(), ".")
 				if trimmedPluginName[0] == "" {
@@ -270,7 +274,8 @@ func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
 	return ps, nil
 }
 
-// DiscoverExternalPlugins discovers the external plugins in the plugins root directory and adds them to external.Plugin.
+// DiscoverExternalPlugins discovers the external plugins in the plugins root directory
+// and adds them to external.Plugin.
 func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
 	fs := machinery.Filesystem{
 		FS: afero.NewOsFs(),
