@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -61,7 +62,7 @@ var _ = Describe("Discover external plugins", func() {
 				FS: afero.NewMemMapFs(),
 			}
 
-			pluginPath, err = getPluginsRoot()
+			pluginPath, err = getPluginsRoot(runtime.GOOS)
 			Expect(err).To(BeNil())
 
 			pluginFileName = "externalPlugin.sh"
@@ -90,7 +91,7 @@ var _ = Describe("Discover external plugins", func() {
 			_, err = fs.FS.Stat(pluginFilePath)
 			Expect(err).To(BeNil())
 
-			ps, err := discoverExternalPlugins(fs.FS)
+			ps, err := DiscoverExternalPlugins(fs.FS)
 			Expect(err).To(BeNil())
 			Expect(ps).NotTo(BeNil())
 			Expect(len(ps)).To(Equal(1))
@@ -122,7 +123,7 @@ var _ = Describe("Discover external plugins", func() {
 			_, err = fs.FS.Stat(pluginFilePath)
 			Expect(err).To(BeNil())
 
-			ps, err := discoverExternalPlugins(fs.FS)
+			ps, err := DiscoverExternalPlugins(fs.FS)
 			Expect(err).To(BeNil())
 			Expect(ps).NotTo(BeNil())
 			Expect(len(ps)).To(Equal(2))
@@ -138,7 +139,7 @@ var _ = Describe("Discover external plugins", func() {
 					FS: afero.NewMemMapFs(),
 				}
 
-				pluginPath, err = getPluginsRoot()
+				pluginPath, err = getPluginsRoot(runtime.GOOS)
 				Expect(err).To(BeNil())
 
 			})
@@ -161,7 +162,7 @@ var _ = Describe("Discover external plugins", func() {
 				err = fs.FS.Chmod(pluginFilePath, 0444)
 				Expect(err).To(Not(HaveOccurred()))
 
-				ps, err := discoverExternalPlugins(fs.FS)
+				ps, err := DiscoverExternalPlugins(fs.FS)
 				Expect(err).NotTo(BeNil())
 				Expect(err.Error()).To(ContainSubstring("not an executable"))
 				Expect(len(ps)).To(Equal(0))
@@ -179,7 +180,7 @@ var _ = Describe("Discover external plugins", func() {
 				Expect(err).To(BeNil())
 				Expect(f).ToNot(BeNil())
 
-				ps, err := discoverExternalPlugins(fs.FS)
+				ps, err := DiscoverExternalPlugins(fs.FS)
 				Expect(err).NotTo(BeNil())
 				Expect(err.Error()).To(ContainSubstring("Invalid plugin name found"))
 				Expect(len(ps)).To(Equal(0))
@@ -193,7 +194,7 @@ var _ = Describe("Discover external plugins", func() {
 					FS: afero.NewMemMapFs(),
 				}
 
-				pluginPath, err = getPluginsRoot()
+				pluginPath, err = getPluginsRoot(runtime.GOOS)
 				Expect(err).To(BeNil())
 
 			})
@@ -212,7 +213,7 @@ var _ = Describe("Discover external plugins", func() {
 				err = fs.FS.Chmod(pluginFilePath, filePermissions)
 				Expect(err).To(BeNil())
 
-				ps, err := discoverExternalPlugins(fs.FS)
+				ps, err := DiscoverExternalPlugins(fs.FS)
 				Expect(err).To(BeNil())
 				Expect(len(ps)).To(Equal(0))
 
@@ -220,11 +221,11 @@ var _ = Describe("Discover external plugins", func() {
 
 			It("should return error if pluginsroot returns an error", func() {
 				var errPluginsRoot = errors.New("could not retrieve plugins root")
-				retrievePluginsRoot = func() (string, error) {
+				retrievePluginsRoot = func(host string) (string, error) {
 					return "", errPluginsRoot
 				}
 
-				_, err := discoverExternalPlugins(fs.FS)
+				_, err := DiscoverExternalPlugins(fs.FS)
 				Expect(err).NotTo(BeNil())
 
 				Expect(err).To(Equal(errPluginsRoot))
@@ -232,12 +233,24 @@ var _ = Describe("Discover external plugins", func() {
 			})
 
 			It("should skip parsing of directories if plugins root is not a directory", func() {
-				retrievePluginsRoot = func() (string, error) {
+				retrievePluginsRoot = func(host string) (string, error) {
 					return "externalplugin.sh", nil
 				}
 
-				_, err := discoverExternalPlugins(fs.FS)
+				_, err := DiscoverExternalPlugins(fs.FS)
 				Expect(err).To(BeNil())
+			})
+
+			It("should fail for any other host that is not supported", func() {
+				_, err := getPluginsRoot("darwin")
+				Expect(err).To(BeNil())
+
+				_, err = getPluginsRoot("linux")
+				Expect(err).To(BeNil())
+
+				_, err = getPluginsRoot("random")
+				Expect(err).ToNot(BeNil())
+				Expect(err.Error()).To(ContainSubstring("Host not supported"))
 			})
 
 		})

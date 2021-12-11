@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/kubebuilder/v3/pkg/config"
 	cfgv2 "sigs.k8s.io/kubebuilder/v3/pkg/config/v2"
 	cfgv3 "sigs.k8s.io/kubebuilder/v3/pkg/config/v3"
-	"sigs.k8s.io/kubebuilder/v3/pkg/machinery"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugins/external"
 )
@@ -163,8 +162,8 @@ func parseExternalPluginArgs() (args []string) {
 }
 
 // getPluginsRoot detects the host system and gets the plugins root based on the host.
-func getPluginsRoot() (pluginsRoot string, err error) {
-	switch host := runtime.GOOS; host {
+func getPluginsRoot(host string) (pluginsRoot string, err error) {
+	switch host {
 	case "darwin":
 		logrus.Debugf("Detected host is macOS.")
 		pluginsRoot = filepath.Join("Library", "ApplicationSupport", "kubebuilder", "plugins")
@@ -184,9 +183,11 @@ func getPluginsRoot() (pluginsRoot string, err error) {
 	return pluginsRoot, nil
 }
 
-func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
+// DiscoverExternalPlugins discovers the external plugins in the plugins root directory
+// and adds them to external.Plugin.
+func DiscoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
 	// pluginsRoot, err := getPluginsRoot()
-	pluginsRoot, err := retrievePluginsRoot()
+	pluginsRoot, err := retrievePluginsRoot(runtime.GOOS)
 	if err != nil {
 		logrus.Errorf("could not get plugins root: %v", err)
 		return nil, err
@@ -272,20 +273,6 @@ func discoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
 	}
 
 	return ps, nil
-}
-
-// DiscoverExternalPlugins discovers the external plugins in the plugins root directory
-// and adds them to external.Plugin.
-func DiscoverExternalPlugins() (ps []plugin.Plugin, err error) {
-	fs := machinery.Filesystem{
-		FS: afero.NewOsFs(),
-	}
-
-	plugins, err := discoverExternalPlugins(fs.FS)
-	if err != nil {
-		return nil, err
-	}
-	return plugins, nil
 }
 
 // isPluginExectuable checks if a plugin is an executable based on the bitmask and returns true or false.
