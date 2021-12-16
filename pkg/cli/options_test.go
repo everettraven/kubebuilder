@@ -219,7 +219,7 @@ var _ = Describe("Discover external plugins", func() {
 
 			})
 
-			It("should return error if pluginsroot returns an error", func() {
+			It("should fail if pluginsroot is empty", func() {
 				var errPluginsRoot = errors.New("could not retrieve plugins root")
 				retrievePluginsRoot = func(host string) (string, error) {
 					return "", errPluginsRoot
@@ -230,6 +230,18 @@ var _ = Describe("Discover external plugins", func() {
 
 				Expect(err).To(Equal(errPluginsRoot))
 
+			})
+
+			It("should fail for any other host that is not supported", func() {
+				_, err := getPluginsRoot("darwin")
+				Expect(err).To(BeNil())
+
+				_, err = getPluginsRoot("linux")
+				Expect(err).To(BeNil())
+
+				_, err = getPluginsRoot("random")
+				Expect(err).ToNot(BeNil())
+				Expect(err.Error()).To(ContainSubstring("Host not supported"))
 			})
 
 			It("should skip parsing of directories if plugins root is not a directory", func() {
@@ -251,6 +263,27 @@ var _ = Describe("Discover external plugins", func() {
 				_, err = getPluginsRoot("random")
 				Expect(err).ToNot(BeNil())
 				Expect(err.Error()).To(ContainSubstring("Host not supported"))
+			})
+
+			It("should return error when home directory is set to empty", func() {
+				_, ok := os.LookupEnv("XDG_CONFIG_HOME")
+				if !ok {
+				} else {
+					err = os.Setenv("XDG_CONFIG_HOME", "")
+					Expect(err).To(BeNil())
+				}
+
+				_, ok = os.LookupEnv("HOME")
+				if !ok {
+				} else {
+					err = os.Setenv("HOME", "")
+					Expect(err).To(BeNil())
+				}
+
+				pluginsroot, err := getPluginsRoot(runtime.GOOS)
+				Expect(err).NotTo(BeNil())
+				Expect(pluginsroot).To(Equal(""))
+				Expect(err.Error()).To(ContainSubstring("error retrieving home dir"))
 			})
 
 		})

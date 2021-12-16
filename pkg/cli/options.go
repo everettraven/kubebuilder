@@ -186,7 +186,6 @@ func getPluginsRoot(host string) (pluginsRoot string, err error) {
 // DiscoverExternalPlugins discovers the external plugins in the plugins root directory
 // and adds them to external.Plugin.
 func DiscoverExternalPlugins(fs afero.Fs) (ps []plugin.Plugin, err error) {
-	// pluginsRoot, err := getPluginsRoot()
 	pluginsRoot, err := retrievePluginsRoot(runtime.GOOS)
 	if err != nil {
 		logrus.Errorf("could not get plugins root: %v", err)
