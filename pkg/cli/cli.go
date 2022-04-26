@@ -247,6 +247,11 @@ func (c *CLI) getInfoFromFlags(hasConfigFile bool) error {
 	// behavior (printing the usage of this FlagSet) as we want to print the usage message of the underlying command.
 	fs.BoolP("help", "h", false, fmt.Sprintf("help for %s", c.commandName))
 
+	var override bool
+	fs.BoolVar(&override, "override-default-plugin-chain", false, "override the default plugin chain")
+
+	fmt.Println("OVERRIDE --", override)
+
 	// Omit unknown flags to avoid parsing errors
 	fs.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
 
@@ -281,8 +286,9 @@ func (c *CLI) getInfoFromFlags(hasConfigFile bool) error {
 	// POC: Dynamic Bundle
 	//-----
 
-	if len(c.pluginKeys) != 0 && projectVersionStr != "" {
-		defaultPlugin, ok := c.plugins[c.defaultPlugins[c.projectVersion][0]]
+	if len(c.pluginKeys) != 0 && projectVersionStr != "" && !override {
+		pluginKey := c.defaultPlugins[c.projectVersion][0]
+		defaultPlugin, ok := c.plugins[pluginKey]
 		if !ok {
 			fmt.Println("OUCH - DEFAULT PLUGIN FOR PROJECT VERSION", projectVersionStr)
 		}
@@ -309,12 +315,13 @@ func (c *CLI) getInfoFromFlags(hasConfigFile bool) error {
 		dynamicBundle.InjectPlugins(pluginsToInject)
 		fmt.Println(plugin.PrintDynamicBundle(dynamicBundle))
 
-		c.plugins[plugin.KeyFor(dynamicBundle)] = dynamicBundle
+		c.plugins[pluginKey] = dynamicBundle
 
-		// c.pluginKeys = []string{plugin.KeyFor(dynamicBundle)}
+		c.pluginKeys = []string{plugin.KeyFor(dynamicBundle)}
 
-	} else if len(c.pluginKeys) != 0 {
-		defaultPlugin, ok := c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]]
+	} else if len(c.pluginKeys) != 0 && !override {
+		pluginKey := c.defaultPlugins[c.defaultProjectVersion][0]
+		defaultPlugin, ok := c.plugins[pluginKey]
 		if !ok {
 			fmt.Println("OUCH - DEFAULT PLUGIN FOR DEFAULT PROJECT VERSION", c.defaultProjectVersion)
 		}
@@ -337,9 +344,13 @@ func (c *CLI) getInfoFromFlags(hasConfigFile bool) error {
 
 		fmt.Println("INJECTED PLUGINS --", pluginsToInject[0].Name())
 
-		c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]].(plugin.DynamicBundle).InjectPlugins(pluginsToInject)
+		dynamicBundle.InjectPlugins(pluginsToInject)
 
-		fmt.Println(plugin.PrintDynamicBundle(c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]].(plugin.DynamicBundle)))
+		fmt.Println("DYNAMIC BUNDLE VAR --", plugin.PrintDynamicBundle(dynamicBundle))
+
+		c.plugins[pluginKey] = dynamicBundle
+
+		fmt.Println("PLUGINS DYNAMIC BUNDLE --", plugin.PrintDynamicBundle(c.plugins[pluginKey].(plugin.DynamicBundle)))
 		fmt.Println("new c.plugins --", c.plugins)
 
 		c.pluginKeys = []string{plugin.KeyFor(dynamicBundle)}

@@ -46,6 +46,8 @@ For further help about a specific plugin, set --plugins.
 	// so that it shows up in help and does not cause a parse error.
 	cmd.Flags().String(projectVersionFlag, c.defaultProjectVersion.String(), "project version")
 
+	cmd.Flags().Bool("override-default-plugin-chain", false, "override the default plugin chain")
+
 	// In case no plugin was resolved, instead of failing the construction of the CLI, fail the execution of
 	// this subcommand. This allows the use of subcommands that do not require resolved plugins like help.
 	if len(c.resolvedPlugins) == 0 {

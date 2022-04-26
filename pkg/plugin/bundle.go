@@ -113,7 +113,7 @@ func (db dynamicBundle) InjectPlugins(plugins []Plugin) {
 		pluginstring += fmt.Sprintf("PLUGIN NAME: %s, PLUGIN VERSION: %s, SUPPROJV: %s, PLUGIN_KEY: %s | ", plugin.Name(), plugin.Version(), plugin.SupportedProjectVersions(), KeyFor(plugin))
 	}
 	fmt.Printf("INJECTING PLUGINS %s\n", pluginstring)
-	db.bundle.plugins = plugins
+	copy(db.bundle.plugins, plugins)
 }
 
 func NewDynamicBundle(name string, version Version, beforePlugins []Plugin, injectedPlugins []Plugin, afterPlugins []Plugin) (DynamicBundle, error) {
