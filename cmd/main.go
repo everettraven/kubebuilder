@@ -23,7 +23,9 @@ import (
 	cfgv2 "sigs.k8s.io/kubebuilder/v3/pkg/config/v2"
 	cfgv3 "sigs.k8s.io/kubebuilder/v3/pkg/config/v3"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugin"
+	"sigs.k8s.io/kubebuilder/v3/pkg/plugins"
 	kustomizecommonv1 "sigs.k8s.io/kubebuilder/v3/pkg/plugins/common/kustomize/v1"
+	dynamictest "sigs.k8s.io/kubebuilder/v3/pkg/plugins/dynamic-test-plugin-1"
 	"sigs.k8s.io/kubebuilder/v3/pkg/plugins/golang"
 	declarativev1 "sigs.k8s.io/kubebuilder/v3/pkg/plugins/golang/declarative/v1"
 	golangv2 "sigs.k8s.io/kubebuilder/v3/pkg/plugins/golang/v2"
@@ -38,6 +40,27 @@ func main() {
 		golangv3.Plugin{},
 	)
 
+	//POC: DynamicBundle
+	v3Dynamic, _ := plugin.NewDynamicBundle(
+		"dynamic."+plugins.DefaultNameQualifier,
+		plugin.Version{Number: 3},
+		[]plugin.Plugin{
+			kustomizecommonv1.Plugin{},
+		},
+		[]plugin.Plugin{
+			golangv3.Plugin{},
+		},
+		nil)
+
+	v2Dynamic, _ := plugin.NewDynamicBundle(
+		"dynamic."+plugins.DefaultNameQualifier,
+		plugin.Version{Number: 2},
+		nil,
+		[]plugin.Plugin{
+			golangv2.Plugin{},
+		},
+		nil)
+
 	c, err := cli.New(
 		cli.WithCommandName("kubebuilder"),
 		cli.WithVersion(versionString()),
@@ -47,9 +70,12 @@ func main() {
 			gov3Bundle,
 			&kustomizecommonv1.Plugin{},
 			&declarativev1.Plugin{},
+			v2Dynamic,
+			v3Dynamic,
+			dynamictest.Plugin{},
 		),
-		cli.WithDefaultPlugins(cfgv2.Version, golangv2.Plugin{}),
-		cli.WithDefaultPlugins(cfgv3.Version, gov3Bundle),
+		cli.WithDefaultPlugins(cfgv2.Version, v2Dynamic),
+		cli.WithDefaultPlugins(cfgv3.Version, v3Dynamic),
 		cli.WithDefaultProjectVersion(cfgv3.Version),
 		cli.WithCompletion(),
 	)

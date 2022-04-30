@@ -77,3 +77,74 @@ func (b bundle) SupportedProjectVersions() []config.Version {
 func (b bundle) Plugins() []Plugin {
 	return b.plugins
 }
+
+// POC: Dynamic Bundles
+// -----
+type dynamicBundle struct {
+	bundle
+
+	beforePlugins []Plugin
+	afterPlugins  []Plugin
+}
+
+// Name implements Plugin
+func (db dynamicBundle) Name() string {
+	return db.bundle.name
+}
+
+// Version implements Plugin
+func (db dynamicBundle) Version() Version {
+	return db.bundle.version
+}
+
+// SupportedProjectVersions implements Plugin
+func (db dynamicBundle) SupportedProjectVersions() []config.Version {
+	return db.bundle.supportedProjectVersions
+}
+
+// Plugins implements Bundle
+func (db dynamicBundle) Plugins() []Plugin {
+	return append(db.beforePlugins, append(db.bundle.plugins, db.afterPlugins...)...)
+}
+
+func (db dynamicBundle) InjectPlugins(plugins []Plugin) {
+	var pluginstring string
+	for _, plugin := range plugins {
+		pluginstring += fmt.Sprintf("PLUGIN NAME: %s, PLUGIN VERSION: %s, SUPPROJV: %s, PLUGIN_KEY: %s | ", plugin.Name(), plugin.Version(), plugin.SupportedProjectVersions(), KeyFor(plugin))
+	}
+	fmt.Printf("INJECTING PLUGINS %s\n", pluginstring)
+	db.bundle.plugins = plugins
+}
+
+func NewDynamicBundle(name string, version Version, beforePlugins []Plugin, injectedPlugins []Plugin, afterPlugins []Plugin) (DynamicBundle, error) {
+	supportedProjectVersions := CommonSupportedProjectVersions(append(beforePlugins, (append(injectedPlugins, afterPlugins...))...)...)
+	if len(supportedProjectVersions) == 0 {
+		return nil, fmt.Errorf("in order to bundle plugins, they must all support at least one common project version")
+	}
+
+	return newDynamicBundle(name, version, supportedProjectVersions, beforePlugins, injectedPlugins, afterPlugins), nil
+}
+
+func newDynamicBundle(name string, version Version, spv []config.Version, bp []Plugin, ip []Plugin, ap []Plugin) dynamicBundle {
+	var db dynamicBundle
+	db.bundle.name = name
+	db.bundle.version = version
+	db.bundle.supportedProjectVersions = spv
+	db.bundle.plugins = append(db.bundle.plugins, ip...)
+
+	db.beforePlugins = append(db.beforePlugins, bp...)
+	db.afterPlugins = append(db.afterPlugins, ap...)
+
+	return db
+}
+
+func PrintDynamicBundle(db DynamicBundle) string {
+	var plugins string
+	for _, plugin := range db.Plugins() {
+		plugins += fmt.Sprintf("PLUGIN NAME: %s, PLUGIN VERSION: %s, SUPPROJV: %s, PLUGIN_KEY: %s | ", plugin.Name(), plugin.Version(), plugin.SupportedProjectVersions(), KeyFor(plugin))
+	}
+
+	return fmt.Sprintf("DB NAME: %s\nDB VERSION: %s\nDB SUPPRV: %s\nPLUGINS: %s", db.Name(), db.Version(), db.SupportedProjectVersions(), plugins)
+}
+
+//-----

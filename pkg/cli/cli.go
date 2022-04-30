@@ -278,6 +278,74 @@ func (c *CLI) getInfoFromFlags(hasConfigFile bool) error {
 		}
 	}
 
+	// POC: Dynamic Bundle
+	//-----
+
+	if len(c.pluginKeys) != 0 && projectVersionStr != "" {
+		defaultPlugin, ok := c.plugins[c.defaultPlugins[c.projectVersion][0]]
+		if !ok {
+			fmt.Println("OUCH - DEFAULT PLUGIN FOR PROJECT VERSION", projectVersionStr)
+		}
+
+		fmt.Println("DEFAULT PLUGIN --", defaultPlugin)
+
+		dynamicBundle := defaultPlugin.(plugin.DynamicBundle)
+		fmt.Println(plugin.PrintDynamicBundle(dynamicBundle))
+
+		var pluginsToInject []plugin.Plugin
+
+		for _, pluginKey := range c.pluginKeys {
+			fmt.Println("PLUGIN KEY --", pluginKey)
+			pluginToInject, ok := c.plugins[pluginKey]
+			if !ok {
+				continue
+			}
+			fmt.Println("PLUGIN --", plugin.KeyFor(pluginToInject))
+
+			pluginsToInject = append(pluginsToInject, pluginToInject)
+		}
+		fmt.Println("INJECTED PLUGINS --", pluginsToInject[0].Name())
+
+		dynamicBundle.InjectPlugins(pluginsToInject)
+		fmt.Println(plugin.PrintDynamicBundle(dynamicBundle))
+
+		c.plugins[plugin.KeyFor(dynamicBundle)] = dynamicBundle
+
+		// c.pluginKeys = []string{plugin.KeyFor(dynamicBundle)}
+
+	} else if len(c.pluginKeys) != 0 {
+		defaultPlugin, ok := c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]]
+		if !ok {
+			fmt.Println("OUCH - DEFAULT PLUGIN FOR DEFAULT PROJECT VERSION", c.defaultProjectVersion)
+		}
+
+		dynamicBundle := defaultPlugin.(plugin.DynamicBundle)
+		fmt.Println(plugin.PrintDynamicBundle(dynamicBundle))
+		var pluginsToInject []plugin.Plugin
+
+		for _, pluginKey := range c.pluginKeys {
+			fmt.Println("PLUGIN KEY --", pluginKey)
+			pluginToInject, ok := c.plugins[pluginKey]
+			if !ok {
+				continue
+			}
+
+			fmt.Println("PLUGIN --", plugin.KeyFor(pluginToInject))
+
+			pluginsToInject = append(pluginsToInject, pluginToInject)
+		}
+
+		fmt.Println("INJECTED PLUGINS --", pluginsToInject[0].Name())
+
+		c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]].(plugin.DynamicBundle).InjectPlugins(pluginsToInject)
+
+		fmt.Println(plugin.PrintDynamicBundle(c.plugins[c.defaultPlugins[c.defaultProjectVersion][0]].(plugin.DynamicBundle)))
+		fmt.Println("new c.plugins --", c.plugins)
+
+		c.pluginKeys = []string{plugin.KeyFor(dynamicBundle)}
+	}
+	//-----
+
 	return nil
 }
 
@@ -354,6 +422,7 @@ func (c *CLI) resolvePlugins() error {
 		// Only 1 plugin can match
 		switch len(plugins) {
 		case 1:
+			fmt.Println("RESOLVED PLUGINS --", plugin.KeyFor(plugins[0]))
 			c.resolvedPlugins = append(c.resolvedPlugins, plugins[0])
 		case 0:
 			return fmt.Errorf("no plugin could be resolved with key %q%s", pluginKey, extraErrMsg)

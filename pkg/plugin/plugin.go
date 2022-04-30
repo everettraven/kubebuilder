@@ -84,3 +84,15 @@ type Bundle interface {
 	// The returned list should be flattened, i.e., no plugin bundles should be part of this list.
 	Plugins() []Plugin
 }
+
+// POC: Dynamic Bundles
+// -----
+// DynamicBundle allows to set default plugins that should always run before and after plugins
+type DynamicBundle interface {
+	Bundle
+
+	// InjectPlugins takes a list of plugins to add to the bundle plugins
+	InjectPlugins(plugins []Plugin)
+}
+
+//-----
