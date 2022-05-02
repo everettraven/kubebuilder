@@ -107,13 +107,12 @@ func (db dynamicBundle) Plugins() []Plugin {
 	return append(db.beforePlugins, append(db.bundle.plugins, db.afterPlugins...)...)
 }
 
-func (db dynamicBundle) InjectPlugins(plugins []Plugin) {
-	var pluginstring string
-	for _, plugin := range plugins {
-		pluginstring += fmt.Sprintf("PLUGIN NAME: %s, PLUGIN VERSION: %s, SUPPROJV: %s, PLUGIN_KEY: %s | ", plugin.Name(), plugin.Version(), plugin.SupportedProjectVersions(), KeyFor(plugin))
-	}
-	fmt.Printf("INJECTING PLUGINS %s\n", pluginstring)
-	copy(db.bundle.plugins, plugins)
+func (db dynamicBundle) BeforePlugins() []Plugin {
+	return db.beforePlugins
+}
+
+func (db dynamicBundle) AfterPlugins() []Plugin {
+	return db.afterPlugins
 }
 
 func NewDynamicBundle(name string, version Version, beforePlugins []Plugin, injectedPlugins []Plugin, afterPlugins []Plugin) (DynamicBundle, error) {
@@ -144,7 +143,7 @@ func PrintDynamicBundle(db DynamicBundle) string {
 		plugins += fmt.Sprintf("PLUGIN NAME: %s, PLUGIN VERSION: %s, SUPPROJV: %s, PLUGIN_KEY: %s | ", plugin.Name(), plugin.Version(), plugin.SupportedProjectVersions(), KeyFor(plugin))
 	}
 
-	return fmt.Sprintf("DB NAME: %s\nDB VERSION: %s\nDB SUPPRV: %s\nPLUGINS: %s", db.Name(), db.Version(), db.SupportedProjectVersions(), plugins)
+	return fmt.Sprintf("---------\nDB NAME: %s\nDB VERSION: %s\nDB SUPPRV: %s\nPLUGINS: %s\n---------\n", db.Name(), db.Version(), db.SupportedProjectVersions(), plugins)
 }
 
 //-----

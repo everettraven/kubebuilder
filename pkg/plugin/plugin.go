@@ -91,8 +91,11 @@ type Bundle interface {
 type DynamicBundle interface {
 	Bundle
 
-	// InjectPlugins takes a list of plugins to add to the bundle plugins
-	InjectPlugins(plugins []Plugin)
+	// BeforePlugins returns the list of plugins that should be run before all plugins
+	BeforePlugins() []Plugin
+
+	// AfterPlugins returns the list of plugins that should be run after all plugins
+	AfterPlugins() []Plugin
 }
 
 //-----
